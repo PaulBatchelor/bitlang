@@ -18,7 +18,7 @@ Can be used to generate the following image:
 
 Bitlang is written in a literate style.
 Before building, bitlang must be tangled into C code
-using [worgle](git.sr.ht/~pbatch/worgle).
+using [worgle](https://git.sr.ht/~pbatch/worgle).
 
 The example program can be built using the `build.sh` script.
 Running this program will generate a PBM file, which can

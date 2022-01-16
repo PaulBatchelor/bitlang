@@ -67,3 +67,8 @@ Bitlang tangles out into 2 files `bitlang.c` and
 `bitlang.h`. These can be dropped.
 
 For API usage, see [example.c](./example.c).
+
+## Woven HTML Output
+
+Bitlang is written in a literate style. The woven HTML
+component can be found and read [here](https://pbat.ch/loom/bitlang).

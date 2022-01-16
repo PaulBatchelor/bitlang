@@ -3,6 +3,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+
+#ifndef WORGLE_FULLVERSION
+#define WORGLITE
+#endif
+
 /*
  * parg - parse argv
  *

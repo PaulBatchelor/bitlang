@@ -48,7 +48,7 @@ been included in this repo.
 The files for bitlang (bitlang.c, bitlang.h) can be tangled
 by compiling the tangler and the running it on bitlang.org:
 
-    gcc -DWORGLITE worgle.c -o worglite
+    gcc worgle.c -o worglite
     ./worglite -g -Werror bitlang.org
 
 ## Language Overview

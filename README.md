@@ -1,8 +1,11 @@
 # Bitlang
 
-Bitlang is a tiny stack-based DSL written in ANSI-C,
+Bitlang is a tiny stack-based DSL,
 designed for the sole purpose of producing procedurally
 generated 1-bit art.
+
+It is implemented in ANSI-C, and written in a literate
+programming style.
 
 ## Sample
 
@@ -17,15 +20,33 @@ Can be used to generate the following image:
 ## Building
 
 Bitlang and the example program can be built running the
-`build.sh` script. In addition to building the program,
+`build.sh` script.
+
+    ./build.sh
+
+In addition to building the program,
 this script will tangle the bitlang program using a local
 version of Worgle.
 
-Running this program will generate a PBM file, which can
+The program, once compiled can be run with:
+
+    ./example
+
+Running this program will generate a PBM file called
+`example.pbm`, which can
 be converted to a PNG file using imagemagick.
 
+    convert example.pbm example.png
+
+## Tangling
+
+Bitlang is written in a literate style, meaning that
+the code needs to be generated before it can be compiled.
+This process is called tangling. The tangler program has
+been included in this repo.
+
 The files for bitlang (bitlang.c, bitlang.h) can be tangled
-with:
+by compiling the tangler and the running it on bitlang.org:
 
     gcc -DWORGLITE worgle.c -o worglite
     ./worglite -g -Werror bitlang.org

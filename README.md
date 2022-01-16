@@ -16,18 +16,19 @@ Can be used to generate the following image:
 
 ## Building
 
-Bitlang is written in a literate style.
-Before building, bitlang must be tangled into C code
-using [worgle](https://git.sr.ht/~pbatch/worgle).
+Bitlang and the example program can be built running the
+`build.sh` script. In addition to building the program,
+this script will tangle the bitlang program using a local
+version of Worgle.
 
-The example program can be built using the `build.sh` script.
 Running this program will generate a PBM file, which can
 be converted to a PNG file using imagemagick.
 
 The files for bitlang (bitlang.c, bitlang.h) can be tangled
 with:
 
-    worgle -g -Werror bitlang.org
+    gcc -DWORGLITE worgle.c -o worglite
+    ./worglite -g -Werror bitlang.org
 
 ## Language Overview
 

@@ -1,0 +1,1087 @@
+#+TITLE: Bitlang
+* Overview
+A small DSL for procedurally generating 1-bit graphics
+in a vaguely shaderlang kind of way. The implemementation
+consists of a stack-based bytecode VM, and a parser
+that "compiles" to bytecode.
+* Tangled Files
+#+NAME: bitlang.h
+#+BEGIN_SRC c :tangle bitlang.h
+#ifndef BITLANG_H
+#define BITLANG_H
+typedef struct bitlang bitlang;
+typedef struct bitlang_state bitlang_state;
+
+#ifdef BITLANG_PRIV
+<<bitlang_struct>>
+<<bitlang_state_struct>>
+#endif
+
+<<funcdefs>>
+#endif
+#+END_SRC
+
+#+NAME: bitlang.c
+#+BEGIN_SRC c :tangle bitlang.c
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#define BITLANG_PRIV
+#include "bitlang.h"
+enum {
+BITLANG_NOP,
+<<opcodes>>
+BITLANG_END
+};
+<<funcs>>
+#+END_SRC
+* VM
+#+NAME: bitlang_struct
+#+BEGIN_SRC c
+struct bitlang {
+    int stk[8];
+    int stkpos;
+    int reg[8];
+    int err;
+};
+#+END_SRC
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+void bitlang_regset(bitlang *vm, int pos, int val);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+void bitlang_regset(bitlang *vm, int pos, int val)
+{
+    vm->reg[pos] = val;
+}
+#+END_SRC
+* State
+#+NAME: bitlang_state_struct
+#+BEGIN_SRC c
+struct bitlang_state {
+    char *bytes;
+    int sz;
+    int len;
+};
+#+END_SRC
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+void bitlang_state_init(bitlang_state *st, char *b, int sz);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+void bitlang_state_init(bitlang_state *st, char *b, int sz)
+{
+    int i;
+    st->bytes = b;
+    st->sz = sz;
+    st->len = 0;
+
+    for (i = 0; i < sz; i++) {
+        st->bytes[i] = 0;
+    }
+}
+#+END_SRC
+* Init
+#+NAME: funcdefs
+#+BEGIN_SRC c
+void bitlang_init(bitlang *vm);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+void bitlang_init(bitlang *vm)
+{
+    int i;
+
+    for (i = 0; i < 8; i++) {
+        vm->stk[i] = 0;
+    }
+
+    vm->stkpos = -1;
+
+    for (i = 0; i < 8; i++) {
+        vm->reg[i] = 0;
+    }
+
+    vm->err = 0;
+}
+#+END_SRC
+* Stack
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_pop(bitlang *vm, int *x);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_pop(bitlang *vm, int *x)
+{
+    if (vm->stkpos < 0) {
+        vm->err = 1;
+        return 1;
+    }
+
+    *x = vm->stk[vm->stkpos];
+    vm->stkpos--;
+    return 0;
+}
+#+END_SRC
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_push(bitlang *vm, int x);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_push(bitlang *vm, int x)
+{
+    if (vm->stkpos >= 8) return 1;
+
+    vm->stkpos++;
+    vm->stk[vm->stkpos] = x;
+
+    return 0;
+}
+#+END_SRC
+* Operations
+** Num
+Creates a 7-bit number in a single instruction.
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_num(bitlang_state *st, int num);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_num(bitlang_state *st, int num)
+{
+    num &= 0x7f;
+
+    if (st->len >= st->sz) return 1;
+
+    st->bytes[st->len] = 0x80 | num;
+    st->len++;
+    return 0;
+}
+#+END_SRC
+** Add
+#+NAME: opcodes
+#+BEGIN_SRC c
+BITLANG_ADD,
+#+END_SRC
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_add(bitlang_state *st);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_add(bitlang_state *st)
+{
+    if (st->len >= st->sz) return 1;
+    st->bytes[st->len] = BITLANG_ADD;
+    st->len++;
+    return 0;
+}
+#+END_SRC
+
+#+NAME: ops
+#+BEGIN_SRC c
+case BITLANG_ADD: {
+    int x, y;
+    rc = bitlang_pop(vm, &y);
+    if (rc) return rc;
+    rc = bitlang_pop(vm, &x);
+    if (rc) return rc;
+    rc = bitlang_push(vm, x + y);
+    if (rc) return rc;
+    pos++;
+    break;
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "+", 1)) {
+    return bitlang_add(st);
+}
+#+END_SRC
+** Sub
+#+NAME: opcodes
+#+BEGIN_SRC c
+BITLANG_SUB,
+#+END_SRC
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_sub(bitlang_state *st);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_sub(bitlang_state *st)
+{
+    if (st->len >= st->sz) return 1;
+    st->bytes[st->len] = BITLANG_SUB;
+    st->len++;
+    return 0;
+}
+#+END_SRC
+
+#+NAME: ops
+#+BEGIN_SRC c
+case BITLANG_SUB: {
+    int x, y;
+    rc = bitlang_pop(vm, &y);
+    if (rc) return rc;
+    rc = bitlang_pop(vm, &x);
+    if (rc) return rc;
+    rc = bitlang_push(vm, x - y);
+    if (rc) return rc;
+    pos++;
+    break;
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "-", 1)) {
+    return bitlang_sub(st);
+}
+#+END_SRC
+** Mul
+#+NAME: opcodes
+#+BEGIN_SRC c
+BITLANG_MUL,
+#+END_SRC
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_mul(bitlang_state *st);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_mul(bitlang_state *st)
+{
+    if (st->len >= st->sz) return 1;
+    st->bytes[st->len] = BITLANG_MUL;
+    st->len++;
+    return 0;
+}
+#+END_SRC
+
+#+NAME: ops
+#+BEGIN_SRC c
+case BITLANG_MUL: {
+    int x, y;
+    rc = bitlang_pop(vm, &y);
+    if (rc) return rc;
+    rc = bitlang_pop(vm, &x);
+    if (rc) return rc;
+    rc = bitlang_push(vm, x * y);
+    if (rc) return rc;
+    pos++;
+    break;
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "*", 1)) {
+    return bitlang_mul(st);
+}
+#+END_SRC
+** Div
+#+NAME: opcodes
+#+BEGIN_SRC c
+BITLANG_DIV,
+#+END_SRC
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_div(bitlang_state *st);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_div(bitlang_state *st)
+{
+    if (st->len >= st->sz) return 1;
+    st->bytes[st->len] = BITLANG_DIV;
+    st->len++;
+    return 0;
+}
+#+END_SRC
+
+#+NAME: ops
+#+BEGIN_SRC c
+case BITLANG_DIV: {
+    int x, y;
+    rc = bitlang_pop(vm, &y);
+    if (rc) return rc;
+    rc = bitlang_pop(vm, &x);
+    if (rc) return rc;
+    if (y == 0) return 1;
+    rc = bitlang_push(vm, x / y);
+    if (rc) return rc;
+    pos++;
+    break;
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "/", 1)) {
+    return bitlang_div(st);
+}
+#+END_SRC
+** Get
+Gets a value from a register and pushes it onto the stack.
+
+#+NAME: opcodes
+#+BEGIN_SRC c
+BITLANG_GET,
+#+END_SRC
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_get(bitlang_state *st);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_get(bitlang_state *st)
+{
+    if (st->len >= st->sz) return 1;
+    st->bytes[st->len] = BITLANG_GET;
+    st->len++;
+    return 0;
+}
+#+END_SRC
+
+#+NAME: ops
+#+BEGIN_SRC c
+case BITLANG_GET: {
+    int rp;
+    rc = bitlang_pop(vm, &rp);
+    if (rc) return rc;
+    if (rp < 0 || rp >= 8) return 1;
+    rc = bitlang_push(vm, vm->reg[rp]);
+    if (rc) return rc;
+    pos++;
+    break;
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "get", 3)) {
+    return bitlang_get(st);
+}
+#+END_SRC
+** X, Y, W, H, T
+These are all links to getters 0-4.
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "x", 1)) {
+    int rc;
+    rc = bitlang_num(st, 0);
+    if (rc) return rc;
+    return bitlang_get(st);
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "y", 1)) {
+    int rc;
+    rc = bitlang_num(st, 1);
+    if (rc) return rc;
+    return bitlang_get(st);
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "w", 1)) {
+    int rc;
+    rc = bitlang_num(st, 2);
+    if (rc) return rc;
+    return bitlang_get(st);
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "h", 1)) {
+    int rc;
+    rc = bitlang_num(st, 3);
+    if (rc) return rc;
+    return bitlang_get(st);
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "t", 1)) {
+    int rc;
+    rc = bitlang_num(st, 4);
+    if (rc) return rc;
+    return bitlang_get(st);
+}
+#+END_SRC
+** Mod
+#+NAME: opcodes
+#+BEGIN_SRC c
+BITLANG_MOD,
+#+END_SRC
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_mod(bitlang_state *st);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_mod(bitlang_state *st)
+{
+    if (st->len >= st->sz) return 1;
+    st->bytes[st->len] = BITLANG_MOD;
+    st->len++;
+    return 0;
+}
+#+END_SRC
+
+#+NAME: ops
+#+BEGIN_SRC c
+case BITLANG_MOD: {
+    int x, y;
+    rc = bitlang_pop(vm, &y);
+    if (rc) return rc;
+    rc = bitlang_pop(vm, &x);
+    if (rc) return rc;
+    if (y == 0) rc = bitlang_push(vm, 0);
+    else rc = bitlang_push(vm, x % y);
+    if (rc) return rc;
+    pos++;
+    break;
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "%", 1)) {
+    return bitlang_mod(st);
+}
+#+END_SRC
+** Equ
+#+NAME: opcodes
+#+BEGIN_SRC c
+BITLANG_EQ,
+#+END_SRC
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_eq(bitlang_state *st);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_eq(bitlang_state *st)
+{
+    if (st->len >= st->sz) return 1;
+    st->bytes[st->len] = BITLANG_EQ;
+    st->len++;
+    return 0;
+}
+#+END_SRC
+
+#+NAME: ops
+#+BEGIN_SRC c
+case BITLANG_EQ: {
+    int x, y;
+    rc = bitlang_pop(vm, &y);
+    if (rc) return rc;
+    rc = bitlang_pop(vm, &x);
+    if (rc) return rc;
+    rc = bitlang_push(vm, x == y);
+    if (rc) return rc;
+    pos++;
+    break;
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "=", 1)) {
+    return bitlang_eq(st);
+}
+#+END_SRC
+** LShift
+#+NAME: opcodes
+#+BEGIN_SRC c
+BITLANG_LSHIFT,
+#+END_SRC
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_lshift(bitlang_state *st);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_lshift(bitlang_state *st)
+{
+    if (st->len >= st->sz) return 1;
+    st->bytes[st->len] = BITLANG_LSHIFT;
+    st->len++;
+    return 0;
+}
+#+END_SRC
+
+#+NAME: ops
+#+BEGIN_SRC c
+case BITLANG_LSHIFT: {
+    int x, y;
+    rc = bitlang_pop(vm, &y);
+    if (rc) return rc;
+    rc = bitlang_pop(vm, &x);
+    if (rc) return rc;
+    rc = bitlang_push(vm, x << y);
+    if (rc) return rc;
+    pos++;
+    break;
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "<<", 2)) {
+    return bitlang_lshift(st);
+}
+#+END_SRC
+** RShift
+#+NAME: opcodes
+#+BEGIN_SRC c
+BITLANG_RSHIFT,
+#+END_SRC
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_rshift(bitlang_state *st);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_rshift(bitlang_state *st)
+{
+    if (st->len >= st->sz) return 1;
+    st->bytes[st->len] = BITLANG_RSHIFT;
+    st->len++;
+    return 0;
+}
+#+END_SRC
+
+#+NAME: ops
+#+BEGIN_SRC c
+case BITLANG_RSHIFT: {
+    int x, y;
+    rc = bitlang_pop(vm, &y);
+    if (rc) return rc;
+    rc = bitlang_pop(vm, &x);
+    if (rc) return rc;
+    rc = bitlang_push(vm, x >> y);
+    if (rc) return rc;
+    pos++;
+    break;
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, ">>", 2)) {
+    return bitlang_rshift(st);
+}
+#+END_SRC
+** Logical OR
+#+NAME: opcodes
+#+BEGIN_SRC c
+BITLANG_LOR,
+#+END_SRC
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_lor(bitlang_state *st);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_lor(bitlang_state *st)
+{
+    if (st->len >= st->sz) return 1;
+    st->bytes[st->len] = BITLANG_LOR;
+    st->len++;
+    return 0;
+}
+#+END_SRC
+
+#+NAME: ops
+#+BEGIN_SRC c
+case BITLANG_LOR: {
+    int x, y;
+    rc = bitlang_pop(vm, &y);
+    if (rc) return rc;
+    rc = bitlang_pop(vm, &x);
+    if (rc) return rc;
+    rc = bitlang_push(vm, x || y);
+    if (rc) return rc;
+    pos++;
+    break;
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "||", 2)) {
+    return bitlang_lor(st);
+}
+#+END_SRC
+** Bitwise OR
+#+NAME: opcodes
+#+BEGIN_SRC c
+BITLANG_BOR,
+#+END_SRC
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_bor(bitlang_state *st);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_bor(bitlang_state *st)
+{
+    if (st->len >= st->sz) return 1;
+    st->bytes[st->len] = BITLANG_BOR;
+    st->len++;
+    return 0;
+}
+#+END_SRC
+
+#+NAME: ops
+#+BEGIN_SRC c
+case BITLANG_BOR: {
+    int x, y;
+    rc = bitlang_pop(vm, &y);
+    if (rc) return rc;
+    rc = bitlang_pop(vm, &x);
+    if (rc) return rc;
+    rc = bitlang_push(vm, x | y);
+    if (rc) return rc;
+    pos++;
+    break;
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "|", 1)) {
+    return bitlang_bor(st);
+}
+#+END_SRC
+** Bitwise AND
+#+NAME: opcodes
+#+BEGIN_SRC c
+BITLANG_BAND,
+#+END_SRC
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_band(bitlang_state *st);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_band(bitlang_state *st)
+{
+    if (st->len >= st->sz) return 1;
+    st->bytes[st->len] = BITLANG_BAND;
+    st->len++;
+    return 0;
+}
+#+END_SRC
+
+#+NAME: ops
+#+BEGIN_SRC c
+case BITLANG_BAND: {
+    int x, y;
+    rc = bitlang_pop(vm, &y);
+    if (rc) return rc;
+    rc = bitlang_pop(vm, &x);
+    if (rc) return rc;
+    rc = bitlang_push(vm, x & y);
+    if (rc) return rc;
+    pos++;
+    break;
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "&", 1)) {
+    return bitlang_band(st);
+}
+#+END_SRC
+** XOR
+#+NAME: opcodes
+#+BEGIN_SRC c
+BITLANG_XOR,
+#+END_SRC
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_xor(bitlang_state *st);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_xor(bitlang_state *st)
+{
+    if (st->len >= st->sz) return 1;
+    st->bytes[st->len] = BITLANG_XOR;
+    st->len++;
+    return 0;
+}
+#+END_SRC
+
+#+NAME: ops
+#+BEGIN_SRC c
+case BITLANG_XOR: {
+    int x, y;
+    rc = bitlang_pop(vm, &y);
+    if (rc) return rc;
+    rc = bitlang_pop(vm, &x);
+    if (rc) return rc;
+    rc = bitlang_push(vm, x ^ y);
+    if (rc) return rc;
+    pos++;
+    break;
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "^", 1)) {
+    return bitlang_xor(st);
+}
+#+END_SRC
+** Bitwise NOT
+#+NAME: opcodes
+#+BEGIN_SRC c
+BITLANG_BNOT,
+#+END_SRC
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_bnot(bitlang_state *st);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_bnot(bitlang_state *st)
+{
+    if (st->len >= st->sz) return 1;
+    st->bytes[st->len] = BITLANG_BNOT;
+    st->len++;
+    return 0;
+}
+#+END_SRC
+
+#+NAME: ops
+#+BEGIN_SRC c
+case BITLANG_BNOT: {
+    int x;
+    rc = bitlang_pop(vm, &x);
+    if (rc) return rc;
+    rc = bitlang_push(vm, ~x);
+    if (rc) return rc;
+    pos++;
+    break;
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "~", 1)) {
+    return bitlang_bnot(st);
+}
+#+END_SRC
+** Logical NOT
+#+NAME: opcodes
+#+BEGIN_SRC c
+BITLANG_LNOT,
+#+END_SRC
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_lnot(bitlang_state *st);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_lnot(bitlang_state *st)
+{
+    if (st->len >= st->sz) return 1;
+    st->bytes[st->len] = BITLANG_LNOT;
+    st->len++;
+    return 0;
+}
+#+END_SRC
+
+#+NAME: ops
+#+BEGIN_SRC c
+case BITLANG_LNOT: {
+    int x;
+    rc = bitlang_pop(vm, &x);
+    if (rc) return rc;
+    rc = bitlang_push(vm, !x);
+    if (rc) return rc;
+    pos++;
+    break;
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "!", 1)) {
+    return bitlang_lnot(st);
+}
+#+END_SRC
+** Abs
+#+NAME: opcodes
+#+BEGIN_SRC c
+BITLANG_ABS,
+#+END_SRC
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_abs(bitlang_state *st);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_abs(bitlang_state *st)
+{
+    if (st->len >= st->sz) return 1;
+    st->bytes[st->len] = BITLANG_ABS;
+    st->len++;
+    return 0;
+}
+#+END_SRC
+
+#+NAME: ops
+#+BEGIN_SRC c
+case BITLANG_ABS: {
+    int x;
+    rc = bitlang_pop(vm, &x);
+    if (rc) return rc;
+    rc = bitlang_push(vm, abs(x));
+    if (rc) return rc;
+    pos++;
+    break;
+}
+#+END_SRC
+
+#+NAME: search
+#+BEGIN_SRC c
+else if (match(str, len, "abs", 3)) {
+    return bitlang_abs(st);
+}
+#+END_SRC
+* Rest
+#+NAME: funcdefs
+#+BEGIN_SRC c
+void bitlang_reset(bitlang *vm);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+void bitlang_reset(bitlang *vm)
+{
+    vm->stkpos = -1;
+}
+#+END_SRC
+* Exec
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_exec(bitlang *vm, bitlang_state *st);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+int bitlang_exec(bitlang *vm, bitlang_state *st)
+{
+    int pos;
+    int sz;
+    char *bytes;
+    int rc;
+
+    pos = 0;
+    rc = 0;
+
+    sz = st->sz;
+    bytes = st->bytes;
+
+    while (pos < sz) {
+        char c;
+
+        c = bytes[pos];
+
+        if (c & 0x80) {
+            rc = bitlang_push(vm, c & 0x7f);
+            if (rc) return rc;
+            pos++;
+            continue;
+        }
+
+        switch(c) {
+            <<ops>>
+            default:
+                pos++;
+                break;
+        }
+    }
+    return 0;
+}
+#+END_SRC
+* Compile
+Compiles a string into bytecode.
+
+#+NAME: funcdefs
+#+BEGIN_SRC c
+int bitlang_compile(bitlang_state *st, const char *code);
+#+END_SRC
+
+#+NAME: funcs
+#+BEGIN_SRC c
+static int match(const char *str1, int sz1,
+                 const char *str2, int sz2)
+{
+    int n;
+    if (sz1 != sz2) return 0;
+
+    for (n = 0; n < sz1; n++)
+        if (str1[n] != str2[n]) return 0;
+
+    return 1;
+}
+
+static int isnum(const char *str) {
+    char c;
+
+    c = str[0] - '0';
+
+    if (c >= 1 && c <= 9) return 1;
+
+    return 0;
+}
+
+static int mknum(const char *str, int len) {
+    int x;
+    int i;
+
+    x = 0;
+
+    for (i = 0; i < len; i++) {
+        int c;
+
+        c = str[i] - '0';
+
+        if (c >= 0 && c <= 9) {
+            x *= 10;
+            x += c;
+        }
+    }
+
+    return x;
+}
+
+static int tokenize(bitlang_state *st,
+                    const char *code,
+                    int b, int e)
+{
+    int len;
+    const char *str;
+
+    len = (e - b) + 1;
+
+    str = &code[b];
+
+    if (isnum(str)) {
+        return bitlang_num(st, mknum(str, len));
+    }
+    <<search>>
+
+    return 1;
+}
+
+int bitlang_compile(bitlang_state *st, const char *code)
+{
+    int b, e;
+    int sz;
+    int n;
+    int mode;
+
+    sz = strlen(code);
+
+    b = 0;
+    e = 0;
+
+    mode = 0;
+
+    n = 0;
+
+    while (n < sz) {
+        char c;
+
+        c = code[n];
+        if (mode == 0) {
+            if (c == ' ') {
+                n++;
+            } else {
+                b = n;
+                mode = 1;
+                n++;
+            }
+        } else if (mode == 1) {
+            if (c == ' ') {
+                e = n - 1;
+
+                mode = 0;
+                tokenize(st, code, b, e);
+            }
+            n++;
+        } else {
+            n++;
+        }
+    }
+
+    if (b < sz) {
+        e = sz - 1;
+        tokenize(st, code, b, e);
+    }
+    return 0;
+}
+#+END_SRC

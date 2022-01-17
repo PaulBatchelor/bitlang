@@ -13,9 +13,15 @@ In bitlang, this expression:
 
     x y + abs x y - abs 1 + ^ 2 << 3 % !
 
-Can be used to generate the following image:
+can be used to generate the following image:
 
 ![1-bit art based on work by Foldster](foldster.png)
+
+by writing a 256 by 256 loop in C that sets x and y to each
+coordinate, asking bitlang the value of the expression, and treating
+true values as black pixels and false values as white pixels.
+
+`example.c` shows how it works and is a good template to start from.
 
 ## Building
 
